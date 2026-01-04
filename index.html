@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3d Preview Test</title>
+<style>
+body { margin:0; overflow:hidden; background:#111; }
+canvas { display:block; }
+</style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.set(10, 8, 10);
+let angle = 0;
+let radius = 10;
+const minRadius = 5;
+const maxRadius = 30;
+
+window.addEventListener('wheel', (event) => {
+    radius += event.deltaY * 0.01;
+    radius = Math.min(Math.max(radius, minRadius), maxRadius)
+});
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const ambient = new THREE.AmbientLight(0xffcfa0, 0.5);
+scene.add(ambient);
+
+const hemi = new THREE.HemisphereLight(0xffe6b3, 0x442200, 0.9);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xffc880, 1.0);
+sun.position.set(15,25,-15);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 50;
+sun.shadow.camera.left = -15;
+sun.shadow.camera.right = 15;
+sun.shadow.camera.top = 15;
+sun.shadow.camera.bottom = -15;
+sun.shadow.bias = -0.001;
+scene.add(sun);
+
+const fillLight = new THREE.DirectionalLight(0xffd8aa, 0.7);
+fillLight.position.set(-10, 10, 10);
+scene.add(fillLight);
+
+const loader = new THREE.TextureLoader();
+let zipFiles = {};
+const zipUrl = "./Blo3D.zip";
+
+async function loadTexturesFromZip(url) {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+
+    const jszip = new JSZip();
+    const zip = await jszip.loadAsync(arrayBuffer);
+
+    for (const filename of Object.keys(zip.files)) {
+        if (filename.endsWith(".png") || filename.endsWith(".jpg")) {
+            const blob = await zip.files[filename].async("blob");
+            zipFiles[filename.split("/").pop()] = URL.createObjectURL(blob);
+        }
+    }
+
+    buildScene();
+}
+
+function loadPixelTexture(name, repeatX = 1, repeatY = 1) {
+    const tex = loader.load(zipFiles[name]);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repeatX, repeatY);
+    return tex;
+}
+
+function stylizeMaterial(mat){
+    mat.roughness = 0.9; 
+    mat.metalness = 0;
+    return mat;
+}
+
+function buildScene() {
+    const geometry = new THREE.BoxGeometry(0.998,1,0.998);
+
+    const grassMat = stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("grass_top.png") }));
+    const dirtMat  = stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("dirt.png") }));
+    const stoneMat = stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("stone.png") }));
+    const poleMat  = stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("log_maple.png") }));
+
+    const chestMaterials = [
+        stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("chest_side.png") })),
+        stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("chest_side.png") })),
+        stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("chest_top.png") })),
+        stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("chest_side.png") })),
+        stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("chest_front.png") })),
+        stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("chest_side.png") })),
+    ];
+
+    function createPlatform(w,d,h,ox,oz){
+        for(let y=0;y<h;y++){
+            let mat = (y===h-1)? grassMat : (y===h-2)? dirtMat : stoneMat;
+            for(let x=0;x<w;x++){
+                for(let z=0;z<d;z++){
+                    const b=new THREE.Mesh(geometry, mat);
+                    b.position.set(x-(w-1)/2+ox, y+0.5, z-(d-1)/2+oz);
+                    b.castShadow=true; b.receiveShadow=true;
+                    scene.add(b);
+                }
+            }
+        }
+    }
+
+    createPlatform(3,3,5,0,-3);
+    createPlatform(3,3,5,0,0);
+    createPlatform(3,3,5,3,0);
+
+    const cBlock = new THREE.Mesh(new THREE.BoxGeometry(0.998,1,0.998), chestMaterials);
+    cBlock.position.set(0, 5 + 0.5, -4);
+    cBlock.castShadow = true; cBlock.receiveShadow = true;
+    scene.add(cBlock);
+
+    const wBlock = new THREE.Mesh(new THREE.BoxGeometry(0.998,2,0.998), poleMat);
+    wBlock.position.set(0, 5 + 1, 0);
+    wBlock.castShadow = true; wBlock.receiveShadow = true;
+    scene.add(wBlock);
+
+    function createLeavesBox(width, height, depth, x, y, z, texName){
+        const geo = new THREE.BoxGeometry(width,height,depth);
+        const tex = loadPixelTexture(texName, width, height);
+        const mat = stylizeMaterial(new THREE.MeshStandardMaterial({ map: tex }));
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y + height/2, z);
+        mesh.castShadow=true; mesh.receiveShadow=true;
+        scene.add(mesh);
+    }
+
+    createLeavesBox(5,2,5, wBlock.position.x, wBlock.position.y + 1, wBlock.position.z, "leaves_maple.png");
+    createLeavesBox(3,2,3, wBlock.position.x, wBlock.position.y + 3, wBlock.position.z, "leaves_maple.png");
+
+    animate();
+}
+
+function animate(){
+    requestAnimationFrame(animate);
+    angle += 0.0035;
+    camera.position.x = Math.cos(angle) * radius;
+    camera.position.z = Math.sin(angle) * radius;
+    camera.position.y = 7;
+    camera.lookAt(1.5,2.5,0);
+    renderer.render(scene,camera);
+}
+
+window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+loadTexturesFromZip(zipUrl);
+</script>
+</body>
+</html>
