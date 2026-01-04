@@ -112,7 +112,7 @@ function buildScene() {
         stylizeMaterial(new THREE.MeshStandardMaterial({ map: loadPixelTexture("chest_side.png") })),
     ];
 
-    function createPlatform(w,d,h,ox,oz){
+    function createPlatform(w,d,h,ox,oz){// this is the main island/platform
         for(let y=0;y<h;y++){
             let mat = (y===h-1)? grassMat : (y===h-2)? dirtMat : stoneMat;
             for(let x=0;x<w;x++){
@@ -126,21 +126,21 @@ function buildScene() {
         }
     }
 
-    createPlatform(3,3,5,0,-3);
+    createPlatform(3,3,5,0,-3);//this is the shape of the island
     createPlatform(3,3,5,0,0);
     createPlatform(3,3,5,3,0);
 
-    const cBlock = new THREE.Mesh(new THREE.BoxGeometry(0.998,1,0.998), chestMaterials);
+    const cBlock = new THREE.Mesh(new THREE.BoxGeometry(0.998,1,0.998), chestMaterials);//chest shuit
     cBlock.position.set(0, 5 + 0.5, -4);
     cBlock.castShadow = true; cBlock.receiveShadow = true;
     scene.add(cBlock);
 
-    const wBlock = new THREE.Mesh(new THREE.BoxGeometry(0.998,2,0.998), poleMat);
+    const wBlock = new THREE.Mesh(new THREE.BoxGeometry(0.998,2,0.998), poleMat);//tree trunk
     wBlock.position.set(0, 5 + 1, 0);
     wBlock.castShadow = true; wBlock.receiveShadow = true;
     scene.add(wBlock);
 
-    function createLeavesBox(width, height, depth, x, y, z, texName){
+    function createLeavesBox(width, height, depth, x, y, z, texName){//leaves
         const geo = new THREE.BoxGeometry(width,height,depth);
         const tex = loadPixelTexture(texName, width, height);
         const mat = stylizeMaterial(new THREE.MeshStandardMaterial({ map: tex }));
@@ -150,8 +150,40 @@ function buildScene() {
         scene.add(mesh);
     }
 
-    createLeavesBox(5,2,5, wBlock.position.x, wBlock.position.y + 1, wBlock.position.z, "leaves_maple.png");
-    createLeavesBox(3,2,3, wBlock.position.x, wBlock.position.y + 3, wBlock.position.z, "leaves_maple.png");
+function createLayerNoCorners(x, y, z, width, depth, texName){//this is the no corner blocks one
+    for(let dx = -Math.floor(width/2); dx <= Math.floor(width/2); dx++){
+        for(let dz = -Math.floor(depth/2); dz <= Math.floor(depth/2); dz++){
+            // Skip corners
+            if (Math.abs(dx) === Math.floor(width/2) && Math.abs(dz) === Math.floor(depth/2)) continue;
+            createLeavesBox(1, 1, 1, x + dx, y, z + dz, texName);
+        }
+    }
+}
+createLayerNoCorners(wBlock.position.x, wBlock.position.y + 1, wBlock.position.z, 5, 5, "leaves_maple.png");
+
+function createLayerNoCorners(x, y, z, width, depth, texName){//this is the no corner blocks one
+    for(let dx = -Math.floor(width/2); dx <= Math.floor(width/2); dx++){
+        for(let dz = -Math.floor(depth/2); dz <= Math.floor(depth/2); dz++){
+            if (Math.abs(dx) === Math.floor(width/2) && Math.abs(dz) === Math.floor(depth/2)) continue;
+            createLeavesBox(1, 1, 1, x + dx, y, z + dz, texName);
+        }
+    }
+}
+
+createLayerNoCorners(wBlock.position.x, wBlock.position.y + 2, wBlock.position.z, 5, 5, "leaves_maple.png");
+
+
+    createLeavesBox(3,1,3, wBlock.position.x, wBlock.position.y + 3, wBlock.position.z, "leaves_maple.png");//this is the box below the cross at th top
+
+function createCrossLeaves(x, y, z, texName){//this is the no cross shit at the top
+    createLeavesBox(1, 1, 1, x, y, z, texName);
+    createLeavesBox(1, 1, 1, x-1, y, z, texName);
+    createLeavesBox(1, 1, 1, x+1, y, z, texName);
+    createLeavesBox(1, 1, 1, x, y, z-1, texName);
+    createLeavesBox(1, 1, 1, x, y, z+1, texName);
+}
+
+createCrossLeaves(wBlock.position.x, wBlock.position.y + 4, wBlock.position.z, "leaves_maple.png");
 
     animate();
 }
